@@ -31,6 +31,47 @@ spec:
       serviceAccountName: {{ include "garage.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.metaRestore.enabled }}
+      initContainers:
+        - name: restore-meta
+          image: "{{ .Values.metaRestore.image.repository }}:{{ .Values.metaRestore.image.tag }}"
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              META=/mnt/meta
+              SNAPDIR={{ .Values.garage.metadataSnapshotsDir | quote }}
+
+              if [ -f "$META/db.lmdb/data.mdb" ]; then
+                echo "[restore] meta present -> skip"; exit 0
+              fi
+
+              SNAPSHOT_NAME="{{ .Values.metaRestore.snapshotName | default "latest" }}"
+              if [ "$SNAPSHOT_NAME" != "latest" ]; then
+                LATEST="$SNAPDIR/$SNAPSHOT_NAME/"
+                if [ ! -d "$LATEST" ] || [ ! -f "${LATEST}db.lmdb" ]; then
+                  echo "[restore] specified snapshot not found: $SNAPSHOT_NAME -> fresh start"
+                  exit 0
+                fi
+              else
+                LATEST=$(ls -1d "$SNAPDIR"/*/ 2>/dev/null | sort | tail -n1 || true)
+                if [ -z "${LATEST:-}" ] || [ ! -f "${LATEST}db.lmdb" ]; then
+                  echo "[restore] no snapshot -> fresh start"; exit 0
+                fi
+              fi
+
+              echo "[restore] restoring from ${LATEST}"
+              mkdir -p "$META/db.lmdb"
+              cp "${LATEST}db.lmdb" "$META/db.lmdb/data.mdb"
+              echo "[restore] done"
+          volumeMounts:
+            - { name: meta, mountPath: /mnt/meta }
+            - { name: snapshots, mountPath: {{ .Values.garage.metadataSnapshotsDir }} }
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -65,6 +106,8 @@ spec:
               mountPath: /mnt/meta
             - name: data
               mountPath: /mnt/data
+            - name: snapshots
+              mountPath: {{.Values.garage.metadataSnapshotsDir}}
             - name: configmap
               mountPath: /etc/garage.toml
               subPath: garage.toml
@@ -95,11 +138,17 @@ spec:
           hostPath:
             path: {{ .Values.persistence.data.hostPath }}
             type: DirectoryOrCreate
+        - name: snapshots
+          hostPath:
+            path: {{ .Values.persistence.snapshots.hostPath }}
+            type: DirectoryOrCreate
         {{- end }}
         {{- else }}
         - name: meta
           emptyDir: {}
         - name: data
+          emptyDir: {}
+        - name: snapshots
           emptyDir: {}
         {{- end }}
         {{- with .Values.extraVolumes }}
@@ -139,4 +188,14 @@ spec:
       resources:
         requests:
           storage: {{ .Values.persistence.data.size | quote }}
+  - metadata:
+      name: snapshots
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- with .Values.persistence.snapshots.storageClass }}
+      storageClassName: {{ . | quote }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.persistence.snapshots.size | quote }}
   {{- end }}

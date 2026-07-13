@@ -42,10 +42,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 50Mi
+              memory: 100Mi
             limits:
               cpu: 50m
-              memory: 50Mi
+              memory: 100Mi
           command: ["/bin/sh", "-c", "cp /bin/busybox /tools/busybox && chmod +x /tools/busybox"]
           volumeMounts:
             - name: tools

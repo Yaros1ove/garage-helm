@@ -37,6 +37,7 @@ garage:
   # -- If this value is set, Garage will automatically take a snapshot of the metadata DB file at a regular interval and save it in the metadata directory.
   # https://garagehq.deuxfleurs.fr/documentation/reference-manual/configuration/#metadata_auto_snapshot_interval
   metadataAutoSnapshotInterval: ""
+  metadataSnapshotsDir: "/mnt/meta/snapshots"
 
   rpc:
     bindAddr: "[::]:3901"
@@ -89,6 +90,18 @@ persistence:
     size: 1Gi
     # used only for daemon sets
     hostPath: /var/lib/garage/data
+  snapshots:
+    storageClass: ~
+    size: 300Mi
+    # used only for daemon sets
+    hostPath: /var/lib/garage/snapshots
+
+metaRestore:
+  enabled: false
+  snapshotName: "latest"
+  image:
+    repository: busybox
+    tag: musl
 
 # Deployment configuration
 deployment:
