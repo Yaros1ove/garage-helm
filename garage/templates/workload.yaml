@@ -17,7 +17,13 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include "garage.config.content" . | sha256sum }}
+        {{- /* When garage.secret.create is false the actual secret is externally managed -
+        garage.secret.content falls back to a fresh random value on every single render
+        (rpcSecret/adminToken default to jupyterhub.randHex when unset), so this checksum
+        would never be stable and would force a pointless rolling restart on every sync. */}}
+        {{- if .Values.garage.secret.create }}
         checksum/secret: {{ include "garage.secret.content" . | sha256sum }}
+        {{- end }}
       {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
